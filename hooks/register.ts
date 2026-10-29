@@ -872,7 +872,7 @@ export const register: Register = (on, options) => {
   on('tool.call', { tool: 'mcp__team-handoff__team_who' }, async $ => {
     if (!(await ready($))) return notConfiguredTool()
     const members = await heartbeat($)
-    return { result: members, text: `You are @${config.me}.\n${formatMembers(members)}` }
+    return toolText(`You are @${config.me}.\n${formatMembers(members)}`)
   }).catch(() => failedTool())
 
   on('tool.call', { tool: 'mcp__team-handoff__team_message' }, async ($, e) => {
