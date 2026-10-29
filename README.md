@@ -5,24 +5,25 @@ messages them, asks their Claude to research something, asks the whole team at o
 or hands your session over. Every incoming question waits for the receiver's
 **Allow**, and their Claude answers read-only.
 
-## Install (teammates)
+## Install
 
 ```
 /plugin install team-handoff --marketplace yashwant1999/team-handoff
-/team-join <your-handle> <relay-url> <token>
 ```
 
-The person hosting the relay gives you the `/team-join` line.
+Then just tell Claude what you want. No scripts, no config files:
 
-## Host the relay (one person, once)
+| You type | What happens |
+| --- | --- |
+| host the team relay on this machine, I'm alex | starts the relay and gives you the join line to share privately |
+| join the team relay as sam, url http://10.0.0.5:8787, token abc… | saves your config and connects |
+| is my team setup working? | checks your handle, the relay and the token, and says how to fix anything |
+| stop the team relay | stops the relay this machine hosts |
 
-```bash
-./setup.sh --host <your-handle>      # starts relay/server.py, prints the /team-join line
-./setup.sh --stop                    # stops it
-```
-
-Run it on a machine the whole team can reach, such as an office server, a small VM or a
-Tailscale node. Use HTTPS beyond the office network.
+Run the relay on a machine the whole team can reach, such as an office server, a small
+VM or a Tailscale node. Use HTTPS beyond the office network. Prefer a terminal?
+`./setup.sh --host <handle>`, `./setup.sh --stop` and `/team-join <handle> <url> <token>`
+do the same.
 
 ## Just say it
 

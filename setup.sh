@@ -39,7 +39,8 @@ case "${1:-}" in
     [[ -s "$data/token" ]] || python3 -c 'import secrets; print(secrets.token_urlsafe(24))' >"$data/token"
     token="$(cat "$data/token")"
     stop_relay
-    TEAM_TOKEN="$token" nohup python3 "$here/relay/server.py" --port "$port" \
+    detach=""; command -v setsid >/dev/null && detach="setsid"
+    TEAM_TOKEN="$token" $detach nohup python3 "$here/relay/server.py" --port "$port" \
       --data "$data/relay.json" >"$data/relay.log" 2>&1 &
     echo "$!" >"$data/relay.pid"
     sleep 1
