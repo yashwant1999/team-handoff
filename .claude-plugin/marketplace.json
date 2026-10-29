@@ -1,0 +1,13 @@
+{
+  "name": "team-handoff",
+  "owner": {
+    "name": "yashwant1999"
+  },
+  "plugins": [
+    {
+      "name": "team-handoff",
+      "source": "./"
+    }
+  ],
+  "description": "Link your team's Claude Code sessions: chat, ask each other's Claude, hand off work."
+}

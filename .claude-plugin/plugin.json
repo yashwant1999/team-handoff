@@ -1,0 +1,35 @@
+{
+  "name": "team-handoff",
+  "version": "0.1.0",
+  "description": "Connects the team's Claude Code sessions: see who works on what, send notes, and pass a session over as a handoff the other person accepts or declines.",
+  "author": {
+    "name": "yashwant1999"
+  },
+  "userConfig": {
+    "user": {
+      "type": "string",
+      "title": "Your handle",
+      "description": "The short name teammates send to, e.g. alex",
+      "default": ""
+    },
+    "relayUrl": {
+      "type": "string",
+      "title": "Relay URL",
+      "description": "Where the team's relay/server.py runs",
+      "default": "http://localhost:8787"
+    },
+    "teamToken": {
+      "type": "string",
+      "title": "Team token",
+      "description": "The relay's shared TEAM_TOKEN",
+      "sensitive": true,
+      "default": ""
+    },
+    "summaryModel": {
+      "type": "string",
+      "title": "Summary model",
+      "description": "Model that writes the handoff summary",
+      "default": "claude-sonnet-5-5"
+    }
+  }
+}
