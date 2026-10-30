@@ -8,6 +8,9 @@ After installing, every step below can be said in plain English:
 
 ## 1. Host the relay (one person, once)
 
+Only the host does this. Everyone else skips to section 2. A second relay makes a
+separate team that nobody else is on.
+
 ```bash
 cd ~/Projects/team-handoff
 ./setup.sh --host <your-handle>     # start or restart the relay; prints the /team-join line
@@ -88,3 +91,5 @@ phrases above.
 | "refused the team token" | the token changed; get the new `/team-join` line |
 | relay won't start | `tail ~/.local/share/team-handoff/relay.log`; port busy → `PORT=8788` |
 | two terminals show the same handle | set `TEAM_HANDOFF_USER` in the second one |
+| a teammate started their own relay by mistake | they say "stop the team relay", then re-run the host's `/team-join` line |
+| see who tried to connect, from the host's side | `tail -f ~/.local/share/team-handoff/relay.log` (shows refused tokens and new members with their IP) |

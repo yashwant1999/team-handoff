@@ -8,6 +8,7 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 config="$HOME/.config/team-handoff.json"
+can_host=false
 data="$HOME/.local/share/team-handoff"
 port="${PORT:-8787}"
 
@@ -31,6 +32,7 @@ case "${1:-}" in
     ;;
   --host)
     [[ $# -eq 2 ]] || usage
+    can_host=true
     user="$2"
     url="http://localhost:$port"
     mkdir -p "$data"
@@ -64,10 +66,11 @@ esac
 
 mkdir -p "$(dirname "$config")"
 umask 077
-python3 - "$config" "$user" "$url" "$token" <<'EOF'
+python3 - "$config" "$user" "$url" "$token" "$can_host" <<'EOF'
 import json, sys
-path, user, url, token = sys.argv[1:]
-json.dump({"user": user.strip().lower(), "relayUrl": url.rstrip("/"), "teamToken": token},
+path, user, url, token, can_host = sys.argv[1:]
+json.dump({"user": user.strip().lower(), "relayUrl": url.rstrip("/"), "teamToken": token,
+           "canHost": can_host == "true"},
           open(path, "w"), indent=2)
 EOF
 

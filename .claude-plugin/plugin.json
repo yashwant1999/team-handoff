@@ -1,6 +1,6 @@
 {
   "name": "team-handoff",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Connects the team's Claude Code sessions: see who works on what, send notes, and pass a session over as a handoff the other person accepts or declines.",
   "author": {
     "name": "yashwant1999"
@@ -30,6 +30,12 @@
       "title": "Summary model",
       "description": "Model that writes the handoff summary",
       "default": "claude-sonnet-5-5"
+    },
+    "canHost": {
+      "type": "boolean",
+      "title": "Can host",
+      "description": "Only the team's host turns this on: lets Claude start a relay on this machine",
+      "default": false
     }
   }
 }

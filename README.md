@@ -5,6 +5,16 @@ messages them, asks their Claude to research something, asks the whole team at o
 or hands your session over. Every incoming question waits for the receiver's
 **Allow**, and their Claude answers read-only.
 
+## Who does what
+
+A team has **one relay**, run by **one host**. Everyone else only joins it.
+
+- **Host (one person):** starts the relay and shares the `/team-join` line privately.
+  Hosting is off by default. `setup.sh --host` turns it on for the host's machine, or
+  they can turn on **Can host** in `/config → team-handoff`.
+- **Everyone else:** installs the plugin and joins. Their Claude never starts a relay,
+  even when they say "set it up". It asks for the join line instead.
+
 ## Install
 
 ```
@@ -15,7 +25,7 @@ Then just tell Claude what you want. No scripts, no config files:
 
 | You type | What happens |
 | --- | --- |
-| host the team relay on this machine, I'm alex | starts the relay and gives you the join line to share privately |
+| host the team relay on this machine, I'm alex | **host only:** after a confirmation, starts the relay and gives you the join line |
 | join the team relay as sam, url http://10.0.0.5:8787, token abc… | saves your config and connects |
 | is my team setup working? | checks your handle, the relay and the token, and says how to fix anything |
 | stop the team relay | stops the relay this machine hosts |

@@ -41,6 +41,10 @@ def save():
     os.replace(tmp, data_path)
 
 
+def log(line):
+    print(time.strftime("%Y-%m-%d %H:%M:%S"), line, flush=True)
+
+
 def members_view():
     now = time.time()
     return sorted(
@@ -69,6 +73,7 @@ class Handler(BaseHTTPRequestHandler):
         given = self.headers.get("X-Team-Token", "")
         if token and secrets.compare_digest(token, given):
             return True
+        log(f"refused: wrong or missing token from {self.client_address[0]}")
         self.reply(401, {"error": "bad or missing X-Team-Token"})
         return False
 
@@ -106,6 +111,8 @@ class Handler(BaseHTTPRequestHandler):
                 user = str(data.get("user", "")).lower()
                 if not user:
                     return self.reply(400, {"error": "user is required"})
+                if user not in db["members"]:
+                    log(f"joined: {user} from {self.client_address[0]}")
                 db["members"][user] = {
                     "user": user,
                     "repo": data.get("repo", ""),
