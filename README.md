@@ -5,6 +5,17 @@ messages them, asks their Claude to research something, asks the whole team at o
 or hands your session over. Every incoming question waits for the receiver's
 **Allow**, and their Claude answers read-only.
 
+## Documentation
+
+| | |
+| --- | --- |
+| [Product](docs/PRODUCT.md) | problem, solution, users, core journey |
+| [Architecture](docs/ARCHITECTURE.md) | components, protocol, decisions and trade-offs, limitations |
+| [AI development](docs/AI_DEVELOPMENT.md) | workflow, context engineering, guardrails, learning from AI failures |
+| [QA](docs/QA.md) | tests, edge and negative cases, how AI output was validated |
+| [Commands](COMMANDS.md) | every command and phrase in one place |
+| [Demo script](docs/DEMO_SCRIPT.md) | the 5-minute walkthrough |
+
 ## Who does what
 
 A team has **one relay**, run by **one host**. Everyone else only joins it.
