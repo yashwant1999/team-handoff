@@ -1288,9 +1288,13 @@ export const register: Register = (on, options) => {
           )}
           {others.map(m => (
             <Box key={`member-${m.user}`} flexDirection="row">
-              <Text color={m.online ? 'green' : undefined} dimColor={!m.online}>{m.online ? '● ' : '○ '}</Text>
-              <Text bold={m.online} dimColor={!m.online}>{m.user.padEnd(isNarrow ? 8 : 10)} </Text>
-              <Box flexGrow={1} flexShrink={1}>
+              <Box flexShrink={0}>
+                <Text color={m.online ? 'green' : undefined} dimColor={!m.online}>{m.online ? '● ' : '○ '}</Text>
+              </Box>
+              <Box flexShrink={0}>
+                <Text bold={m.online} dimColor={!m.online}>{m.user.padEnd(isNarrow ? 8 : 10)} </Text>
+              </Box>
+              <Box flexGrow={1} flexShrink={1} minWidth={0}>
                 <Text dimColor wrap="truncate-end">
                   {isNarrow ? m.branch || '—' : [m.repo, m.branch].filter(Boolean).join(' · ') || '—'}
                   {m.online ? '' : ` · ${ago(m.lastSeen * 1000)}`}
@@ -1311,15 +1315,19 @@ export const register: Register = (on, options) => {
               return (
                 <Box key={id} flexDirection="column" marginTop={1}>
                   <Box flexDirection="row">
-                    <Text>{REQUEST_ICON[card.m.kind] ?? '❓'} </Text>
-                    <Text bold>{card.m.from} </Text>
-                    <Box flexGrow={1} flexShrink={1}>
+                    <Box flexShrink={0}>
+                      <Text>{REQUEST_ICON[card.m.kind] ?? '❓'} </Text>
+                    </Box>
+                    <Box flexShrink={0}>
+                      <Text bold>{card.m.from} </Text>
+                    </Box>
+                    <Box flexGrow={1} flexShrink={1} minWidth={0}>
                       <Text wrap={isOpen ? 'wrap' : 'truncate-end'}>{requestSummary(card.m).replace(/^asked: /, 'asks: ')}</Text>
                     </Box>
-                    {detail !== '' && (card.m.kind === 'handoff' || detail.length > 60) && (
-                      <Button key={`${id}-open`} plain label={isOpen ? ' ▾ hide' : ' ▸ read'} onPress={toggle(id)} />
-                    )}
                   </Box>
+                  {detail !== '' && (card.m.kind === 'handoff' || detail.length > 60) && (
+                    <Button key={`${id}-open`} plain label={isOpen ? '▾ hide details' : '▸ read details'} onPress={toggle(id)} />
+                  )}
                   {isOpen && detail ? <Markdown text={detail} /> : null}
                   {card.m.kind === 'ask' && <Text dimColor>Answered read-only · you approve the answer before it's sent</Text>}
                   <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
@@ -1341,8 +1349,10 @@ export const register: Register = (on, options) => {
                 {later.map(([id, card]) => (
                   <Box key={id} flexDirection="column">
                     <Box flexDirection="row">
-                      <Text dimColor>{REQUEST_ICON[card.m.kind] ?? '❓'} {card.m.from} </Text>
-                      <Box flexGrow={1} flexShrink={1}>
+                      <Box flexShrink={0}>
+                        <Text dimColor>{REQUEST_ICON[card.m.kind] ?? '❓'} {card.m.from} </Text>
+                      </Box>
+                      <Box flexGrow={1} flexShrink={1} minWidth={0}>
                         <Text dimColor wrap="truncate-end">{requestSummary(card.m).replace(/^asked: /, 'asks: ')}</Text>
                       </Box>
                     </Box>
@@ -1379,17 +1389,30 @@ export const register: Register = (on, options) => {
             return (
               <Box key={r.id} flexDirection="column">
                 <Box flexDirection="row">
-                  {!isNarrow && <Text dimColor>{clock(r.at)} </Text>}
-                  <Text color={row.color} dimColor={row.isOwn}>
-                    {row.icon} {row.who}{' '}
-                  </Text>
-                  <Box flexGrow={1} flexShrink={1}>
+                  {/* The toggle leads the row, so a long line can never push it out of view. */}
+                  <Box flexShrink={0} width={2}>
+                    {canOpen ? (
+                      <Button key={`${r.id}-row`} plain label={isOpen ? '▾' : '▸'} onPress={toggle(r.id)} />
+                    ) : (
+                      <Text> </Text>
+                    )}
+                  </Box>
+                  {!isNarrow && (
+                    <Box flexShrink={0}>
+                      <Text dimColor wrap="truncate-end">{clock(r.at)} </Text>
+                    </Box>
+                  )}
+                  <Box flexShrink={0}>
+                    <Text color={row.color} dimColor={row.isOwn} wrap="truncate-end">
+                      {row.icon} {row.who}{' '}
+                    </Text>
+                  </Box>
+                  <Box flexGrow={1} flexShrink={1} minWidth={0}>
                     <Text dimColor={row.isOwn} wrap="truncate-end">
-                      {row.tag ? `${row.tag}  ` : ''}
+                      {row.tag ? `${row.tag} · ` : ''}
                       {row.text}
                     </Text>
                   </Box>
-                  {canOpen && <Button key={`${r.id}-row`} plain label={isOpen ? ' ▾' : ' ▸'} onPress={toggle(r.id)} />}
                 </Box>
                 {isOpen && (
                   <Box flexDirection="column" borderStyle="round" borderDimColor paddingX={1}>

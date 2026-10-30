@@ -1,6 +1,6 @@
 {
   "name": "team-handoff",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Connects the team's Claude Code sessions: see who works on what, send notes, and pass a session over as a handoff the other person accepts or declines.",
   "author": {
     "name": "yashwant1999"
