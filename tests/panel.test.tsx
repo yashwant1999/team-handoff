@@ -166,3 +166,25 @@ test('an invite code joins as the invited handle', async ($, on) => {
   expect(redeemed).toEqual([{ url: 'http://192.168.1.5:8787/redeem', body: { code: 'K7P2-9QXA' } }])
   expect(JSON.parse(written[0] ?? '{}')).toMatchObject({ user: 'vatsal', relayUrl: 'http://192.168.1.5:8787', teamToken: 'tok' })
 })
+
+test('after a restart, the relay address saved by an invite is used', async ($, on) => {
+  const urls: string[] = []
+  mock.clock(on)
+  on('http.fetch', (_, e) => {
+    urls.push(e.url)
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ members: [] }) } }
+  })
+  on('fs.exists', () => ({ value: true }))
+  on('fs.read', () => ({
+    value: JSON.stringify({ user: 'yuvraj', relayUrl: 'http://192.168.1.5:8787', teamToken: 'tok' }),
+  }))
+  on('command.register', (_, e) => ({ value: { command: e.name } }))
+  on('tool.register', (_, e) => ({ value: { tool: `mcp__team-handoff__${e.name}` } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  mock.env(on, { HOME: '/home/test' })
+
+  // No options given: the manifest's defaults apply, as for a teammate who never opened /config.
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(urls.length).toBeGreaterThan(0)
+  expect(urls.every(url => url.startsWith('http://192.168.1.5:8787/'))).toBe(true)
+})

@@ -1,6 +1,6 @@
 {
   "name": "team-handoff",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Connects the team's Claude Code sessions: see who works on what, send notes, and pass a session over as a handoff the other person accepts or declines.",
   "author": {
     "name": "yashwant1999"
@@ -15,8 +15,8 @@
     "relayUrl": {
       "type": "string",
       "title": "Relay URL",
-      "description": "Where the team's relay/server.py runs",
-      "default": "http://localhost:8787"
+      "description": "Leave empty: joining with an invite code saves it. Set it only to override the saved address.",
+      "default": ""
     },
     "teamToken": {
       "type": "string",
