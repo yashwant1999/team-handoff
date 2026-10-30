@@ -96,6 +96,9 @@ const OUTCOME: Record<string, string> = { Accept: '✓ accepted', Allow: '✓ al
 const REQUEST_ICON: Record<string, string> = { handoff: '📦', ask: '❓', connect: '🔗', request: '📤' }
 const cards = new Map<string, Card>()
 let expanded: string | undefined
+// The Waiting box: show every current request, and open the Later group.
+let isWaitingAll = false
+let isLaterOpen = false
 // Teammates whose Claude is answering one of this session's questions.
 const thinking = new Set<string>()
 // Questions this session sent, by group id.
@@ -930,7 +933,7 @@ function feedRow(r: (typeof recent)[number]) {
   const isOwn = r.from === config.me
   if (r.kind.startsWith('req:')) {
     const card = cards.get(r.id)
-    const tag = card ? (card.outcome ?? '⏳ waiting') : 'answered'
+    const tag = card ? (card.outcome ?? (card.isLater ? '⏸ later' : '⏳ waiting')) : 'answered'
     return { icon: REQUEST_ICON[r.kind.slice(4)] ?? '❓', who: r.from, tag, text: r.title, color: 'yellow', isOwn }
   }
   if (r.kind === 'sent') return { icon: '➤', who: `you → ${r.to ?? ''}`, tag: '', text: r.title, color: undefined, isOwn }
@@ -1256,9 +1259,61 @@ export const register: Register = (on, options) => {
       $.ui.invalidate('ui.render')
     }
 
-    const isPending = (r: (typeof recent)[number]) => r.kind.startsWith('req:') && cards.has(r.id) && !cards.get(r.id)?.outcome
     // Everything is drawn; the pane scrolls, and keeps the newest line in view.
-    const feed = recent.filter(r => !isPending(r))
+    const feed = recent
+    const shownNow = isWaitingAll ? now : now.slice(0, 3)
+    const flip = (which: 'all' | 'later') => () => {
+      if (which === 'all') isWaitingAll = !isWaitingAll
+      else isLaterOpen = !isLaterOpen
+      $.ui.invalidate('ui.render')
+    }
+    // One request in the Waiting box: a summary line, a handoff's full text on demand, its buttons.
+    const requestItem = (id: string, card: Card, isDim: boolean) => {
+      const detail = card.m.kind === 'connect' ? '' : card.m.body || ''
+      const canRead = detail !== '' && (card.m.kind === 'handoff' || detail.length > 60)
+      const isOpen = expanded === `w:${id}`
+      return (
+        <Box key={id} flexDirection="column" marginTop={1}>
+          <Box flexDirection="row">
+            <Box flexShrink={0}>
+              <Text dimColor={isDim}>{REQUEST_ICON[card.m.kind] ?? '❓'} </Text>
+            </Box>
+            <Box flexShrink={0}>
+              <Text bold={!isDim} dimColor={isDim}>{card.m.from} </Text>
+            </Box>
+            <Box flexGrow={1} flexShrink={1} minWidth={0}>
+              <Text dimColor={isDim} wrap="truncate-end">{requestSummary(card.m).replace(/^asked: /, 'asks: ')}</Text>
+            </Box>
+          </Box>
+          {canRead && (
+            <Button
+              key={`${id}-open`}
+              plain
+              label={isOpen ? '▾ hide' : card.m.kind === 'handoff' ? '▸ read handoff' : '▸ read question'}
+              onPress={toggle(`w:${id}`)}
+            />
+          )}
+          {isOpen && (
+            <Box flexDirection="column" borderStyle="round" borderDimColor paddingX={1}>
+              <Markdown text={detail} />
+            </Box>
+          )}
+          {card.m.kind === 'ask' && !isDim && <Text dimColor>Answered read-only · you approve the answer before it's sent</Text>}
+          <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+            {card.options
+              .filter(option => !(isDim && option === 'Later'))
+              .map((option, i) => (
+                <Button
+                  key={`${id}-${option}`}
+                  label={option}
+                  variant={i === 0 ? 'primary' : 'secondary'}
+                  onPress={() => ignoreFailure(pressCard($, id, option))}
+                />
+              ))}
+          </Box>
+        </Box>
+      )
+    }
 
     return (
       <Box flexDirection="column" minHeight={height}>
@@ -1309,67 +1364,24 @@ export const register: Register = (on, options) => {
         {waiting.length > 0 && (
           <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
             <Text bold color="yellow">Waiting for you · {waiting.length}</Text>
-            {now.map(([id, card]) => {
-              const detail = card.m.kind === 'connect' ? '' : card.m.body || ''
-              const isOpen = expanded === id
-              return (
-                <Box key={id} flexDirection="column" marginTop={1}>
-                  <Box flexDirection="row">
-                    <Box flexShrink={0}>
-                      <Text>{REQUEST_ICON[card.m.kind] ?? '❓'} </Text>
-                    </Box>
-                    <Box flexShrink={0}>
-                      <Text bold>{card.m.from} </Text>
-                    </Box>
-                    <Box flexGrow={1} flexShrink={1} minWidth={0}>
-                      <Text wrap={isOpen ? 'wrap' : 'truncate-end'}>{requestSummary(card.m).replace(/^asked: /, 'asks: ')}</Text>
-                    </Box>
-                  </Box>
-                  {detail !== '' && (card.m.kind === 'handoff' || detail.length > 60) && (
-                    <Button key={`${id}-open`} plain label={isOpen ? '▾ hide details' : '▸ read details'} onPress={toggle(id)} />
-                  )}
-                  {isOpen && detail ? <Markdown text={detail} /> : null}
-                  {card.m.kind === 'ask' && <Text dimColor>Answered read-only · you approve the answer before it's sent</Text>}
-                  <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
-                    {card.options.map((option, i) => (
-                      <Button
-                        key={`${id}-${option}`}
-                        label={option}
-                        variant={i === 0 ? 'primary' : 'secondary'}
-                        onPress={() => ignoreFailure(pressCard($, id, option))}
-                      />
-                    ))}
-                  </Box>
-                </Box>
-              )
-            })}
+            {shownNow.map(([id, card]) => requestItem(id, card, false))}
+            {now.length > 3 && (
+              <Button
+                key="waiting-all"
+                plain
+                label={isWaitingAll ? '▴ show fewer' : `▾ show all ${now.length}`}
+                onPress={flip('all')}
+              />
+            )}
             {later.length > 0 && (
               <Box flexDirection="column" marginTop={1}>
-                <Text dimColor>Later · {later.length}</Text>
-                {later.map(([id, card]) => (
-                  <Box key={id} flexDirection="column">
-                    <Box flexDirection="row">
-                      <Box flexShrink={0}>
-                        <Text dimColor>{REQUEST_ICON[card.m.kind] ?? '❓'} {card.m.from} </Text>
-                      </Box>
-                      <Box flexGrow={1} flexShrink={1} minWidth={0}>
-                        <Text dimColor wrap="truncate-end">{requestSummary(card.m).replace(/^asked: /, 'asks: ')}</Text>
-                      </Box>
-                    </Box>
-                    <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
-                      {card.options
-                        .filter(option => option !== 'Later')
-                        .map((option, i) => (
-                          <Button
-                            key={`${id}-${option}`}
-                            label={option}
-                            variant={i === 0 ? 'primary' : 'secondary'}
-                            onPress={() => ignoreFailure(pressCard($, id, option))}
-                          />
-                        ))}
-                    </Box>
-                  </Box>
-                ))}
+                <Button
+                  key="later-toggle"
+                  plain
+                  label={`${isLaterOpen ? '▾' : '▸'} Later · ${later.length}`}
+                  onPress={flip('later')}
+                />
+                {isLaterOpen && later.map(([id, card]) => requestItem(id, card, true))}
               </Box>
             )}
           </Box>
