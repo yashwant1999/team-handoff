@@ -129,10 +129,10 @@ test('Later keeps a request waiting; a decision is kept as a record', { options:
   const ui = await $.ui.mount(PANE)
   await ui.press({ key: 'a1-Later' })
   expect(sent.some(s => s.path === '/ack')).toBe(false)
-  expect(await ui.find({ type: 'Text', text: /Waiting for you · 1/ })).toBeDefined()
-  expect((await ui.find({ key: 'later-toggle' }))?.props.label).toBe('▸ Later · 1')
-  expect(await ui.find({ key: 'a1-Later' })).toBeUndefined()
-  await ui.press({ key: 'later-toggle' })
+  // Later leaves Waiting and moves the request to ACTIVITY, where it opens to its buttons.
+  expect(await ui.find({ type: 'Text', text: /Waiting for you/ })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /⏸ later/ }))?.text).toMatch(/asked: what branch\?/)
+  await ui.press({ key: 'a1-row' })
 
   await ui.press({ key: 'a1-Decline' })
   expect(sent.some(s => s.path === '/ack' && s.body.id === 'a1')).toBe(true)
@@ -249,17 +249,22 @@ test('the feed keeps all history for scrolling, not only what fits', { options: 
   await ui.unmount()
 })
 
-test('a waiting handoff can be read before accepting, and shows in ACTIVITY', { options: OPTIONS }, async ($, on) => {
+test('a waiting handoff can be read before accepting; Later moves it to ACTIVITY', { options: OPTIONS }, async ($, on) => {
   const clock = mock.clock(on)
   const handoff = { id: 'h1', kind: 'handoff', from: 'vatsal', to: 'yash', title: 'app @ fix/icon', body: '## Goal\nFix the launcher icon.\n## Next\nTest on a device.', createdAt: 0 }
   engine(on, [handoff], { isOpen: true })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await clock.advance(12_000)
   const ui = await $.ui.mount(PANE)
-  expect((await ui.find({ key: 'h1-open' }))?.props.label).toBe('▸ read handoff')
+  expect((await ui.find({ key: 'h1-open' }))?.props.label).toBe('Read details')
   await ui.press({ key: 'h1-open' })
   expect(await ui.find({ type: 'Markdown' })).toBeDefined()
   expect(await ui.find({ key: 'h1-Accept' })).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: /⏳ waiting/ }))?.text).toMatch(/hands off: app @ fix\/icon/)
+  // Undecided, it lives only in Waiting; Later moves it to ACTIVITY.
+  expect(await ui.find({ type: 'Text', text: /⏳ waiting/ })).toBeUndefined()
+  await ui.press({ key: 'h1-Later' })
+  expect((await ui.find({ type: 'Text', text: /⏸ later/ }))?.text).toMatch(/hands off: app @ fix\/icon/)
+  await ui.press({ key: 'h1-row' })
+  expect(await ui.find({ key: 'h1-Accept' })).toBeDefined()
   await ui.unmount()
 })

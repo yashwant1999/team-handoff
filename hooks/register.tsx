@@ -96,9 +96,8 @@ const OUTCOME: Record<string, string> = { Accept: '✓ accepted', Allow: '✓ al
 const REQUEST_ICON: Record<string, string> = { handoff: '📦', ask: '❓', connect: '🔗', request: '📤' }
 const cards = new Map<string, Card>()
 let expanded: string | undefined
-// The Waiting box: show every current request, and open the Later group.
+// The Waiting box: show every current request, not only the first three.
 let isWaitingAll = false
-let isLaterOpen = false
 // Teammates whose Claude is answering one of this session's questions.
 const thinking = new Set<string>()
 // Questions this session sent, by group id.
@@ -907,7 +906,7 @@ async function pressCard($: $, id: string, choice: string) {
     // Moves to the Later group, still waiting; the relay keeps it until a decision.
     card.isLater = true
     if (expanded === id) expanded = undefined
-    $.ui.toast('Saved for later. It waits under "Later" until you decide.')
+    $.ui.toast('Saved for later. Find it in ACTIVITY (⏸ later) and open it to decide.')
     return $.ui.invalidate('ui.render')
   }
   card.outcome = `${OUTCOME[choice] ?? choice} ${clock(Date.now())}`
@@ -943,6 +942,12 @@ function feedRow(r: (typeof recent)[number]) {
     return { icon: '🤖', who: `${r.from}'s Claude`, tag: '', text: preview(r.body || r.title, 200), color: 'green', isOwn }
   }
   return { icon: KIND_ICON[r.kind] ?? '💬', who: r.from, tag: '', text: preview(`${r.title}${r.body ? `\n${r.body}` : ''}`, 200), color: 'cyan', isOwn }
+}
+
+/** `text` cut to `max` characters with an ellipsis (a pressable row can't shrink by layout). */
+function fit(text: string, max: number) {
+  const chars = [...text.replace(/\s+/g, ' ')]
+  return chars.length > max ? `${chars.slice(0, Math.max(1, max - 1)).join('')}…` : chars.join('')
 }
 
 /** "3m ago", "2h ago", "4d ago". */
@@ -1259,12 +1264,16 @@ export const register: Register = (on, options) => {
       $.ui.invalidate('ui.render')
     }
 
-    // Everything is drawn; the pane scrolls, and keeps the newest line in view.
-    const feed = recent
+    // Undecided requests live in Waiting; Later moves them here, and decisions stay as records.
+    // Everything else is drawn too; the pane scrolls and keeps the newest line in view.
+    const isInWaiting = (r: (typeof recent)[number]) => {
+      const card = r.kind.startsWith('req:') ? cards.get(r.id) : undefined
+      return card !== undefined && !card.outcome && !card.isLater
+    }
+    const feed = recent.filter(r => !isInWaiting(r))
     const shownNow = isWaitingAll ? now : now.slice(0, 3)
-    const flip = (which: 'all' | 'later') => () => {
-      if (which === 'all') isWaitingAll = !isWaitingAll
-      else isLaterOpen = !isLaterOpen
+    const showAll = () => {
+      isWaitingAll = !isWaitingAll
       $.ui.invalidate('ui.render')
     }
     // One request in the Waiting box: a summary line, a handoff's full text on demand, its buttons.
@@ -1274,24 +1283,30 @@ export const register: Register = (on, options) => {
       const isOpen = expanded === `w:${id}`
       return (
         <Box key={id} flexDirection="column" marginTop={1}>
-          <Box flexDirection="row">
-            <Box flexShrink={0}>
+          {canRead ? (
+            // Tapping the line itself shows what is being handed over.
+            <Button key={`${id}-open`} plain label={isOpen ? 'Hide details' : 'Read details'} onPress={toggle(`w:${id}`)}>
+              <Text dimColor>{isOpen ? '▾ ' : '▸ '}</Text>
               <Text dimColor={isDim}>{REQUEST_ICON[card.m.kind] ?? '❓'} </Text>
+              <Text bold={!isDim} dimColor={isDim}>
+                {card.m.from}{' '}
+              </Text>
+              <Text dimColor={isDim}>
+                {fit(requestSummary(card.m).replace(/^asked: /, 'asks: '), width - [...card.m.from].length - 12)}
+              </Text>
+            </Button>
+          ) : (
+            <Box flexDirection="row">
+              <Box flexShrink={0}>
+                <Text dimColor={isDim}>{REQUEST_ICON[card.m.kind] ?? '❓'} </Text>
+              </Box>
+              <Box flexShrink={0}>
+                <Text bold={!isDim} dimColor={isDim}>{card.m.from} </Text>
+              </Box>
+              <Box flexGrow={1} flexShrink={1} minWidth={0}>
+                <Text dimColor={isDim} wrap="truncate-end">{requestSummary(card.m).replace(/^asked: /, 'asks: ')}</Text>
+              </Box>
             </Box>
-            <Box flexShrink={0}>
-              <Text bold={!isDim} dimColor={isDim}>{card.m.from} </Text>
-            </Box>
-            <Box flexGrow={1} flexShrink={1} minWidth={0}>
-              <Text dimColor={isDim} wrap="truncate-end">{requestSummary(card.m).replace(/^asked: /, 'asks: ')}</Text>
-            </Box>
-          </Box>
-          {canRead && (
-            <Button
-              key={`${id}-open`}
-              plain
-              label={isOpen ? '▾ hide' : card.m.kind === 'handoff' ? '▸ read handoff' : '▸ read question'}
-              onPress={toggle(`w:${id}`)}
-            />
           )}
           {isOpen && (
             <Box flexDirection="column" borderStyle="round" borderDimColor paddingX={1}>
@@ -1361,28 +1376,12 @@ export const register: Register = (on, options) => {
           {hidden > 0 && <Text dimColor>+{hidden} offline for over a day</Text>}
         </Box>
 
-        {waiting.length > 0 && (
+        {now.length > 0 && (
           <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
-            <Text bold color="yellow">Waiting for you · {waiting.length}</Text>
+            <Text bold color="yellow">Waiting for you · {now.length}</Text>
             {shownNow.map(([id, card]) => requestItem(id, card, false))}
             {now.length > 3 && (
-              <Button
-                key="waiting-all"
-                plain
-                label={isWaitingAll ? '▴ show fewer' : `▾ show all ${now.length}`}
-                onPress={flip('all')}
-              />
-            )}
-            {later.length > 0 && (
-              <Box flexDirection="column" marginTop={1}>
-                <Button
-                  key="later-toggle"
-                  plain
-                  label={`${isLaterOpen ? '▾' : '▸'} Later · ${later.length}`}
-                  onPress={flip('later')}
-                />
-                {isLaterOpen && later.map(([id, card]) => requestItem(id, card, true))}
-              </Box>
+              <Button key="waiting-all" plain label={isWaitingAll ? '▴ show fewer' : `▾ show all ${now.length}`} onPress={showAll} />
             )}
           </Box>
         )}
@@ -1396,39 +1395,66 @@ export const register: Register = (on, options) => {
           )}
           {feed.map(r => {
             const row = feedRow(r)
-            const canOpen = Boolean(r.body) || r.title.length > width - 24
+            const canOpen = Boolean(r.body) || r.title.length > width - 24 || r.kind.startsWith('req:')
             const isOpen = expanded === r.id
             return (
               <Box key={r.id} flexDirection="column">
-                <Box flexDirection="row">
-                  {/* The toggle leads the row, so a long line can never push it out of view. */}
-                  <Box flexShrink={0} width={2}>
-                    {canOpen ? (
-                      <Button key={`${r.id}-row`} plain label={isOpen ? '▾' : '▸'} onPress={toggle(r.id)} />
-                    ) : (
-                      <Text> </Text>
-                    )}
-                  </Box>
-                  {!isNarrow && (
-                    <Box flexShrink={0}>
-                      <Text dimColor wrap="truncate-end">{clock(r.at)} </Text>
-                    </Box>
-                  )}
-                  <Box flexShrink={0}>
-                    <Text color={row.color} dimColor={row.isOwn} wrap="truncate-end">
+                {canOpen ? (
+                  // The whole line opens the row: one press anywhere on it.
+                  <Button key={`${r.id}-row`} plain label={`${isOpen ? 'Collapse' : 'Open'} ${row.who}`} onPress={toggle(r.id)}>
+                    <Text dimColor>{isOpen ? '▾ ' : '▸ '}</Text>
+                    {!isNarrow && <Text dimColor>{clock(r.at)} </Text>}
+                    <Text color={row.color} dimColor={row.isOwn}>
                       {row.icon} {row.who}{' '}
                     </Text>
-                  </Box>
-                  <Box flexGrow={1} flexShrink={1} minWidth={0}>
-                    <Text dimColor={row.isOwn} wrap="truncate-end">
-                      {row.tag ? `${row.tag} · ` : ''}
-                      {row.text}
+                    <Text dimColor={row.isOwn}>
+                      {fit(`${row.tag ? `${row.tag} · ` : ''}${row.text}`, width - (isNarrow ? 0 : 6) - [...row.who].length - 7)}
                     </Text>
+                  </Button>
+                ) : (
+                  <Box flexDirection="row">
+                    <Box flexShrink={0}>
+                      <Text>{'  '}</Text>
+                    </Box>
+                    {!isNarrow && (
+                      <Box flexShrink={0}>
+                        <Text dimColor wrap="truncate-end">{clock(r.at)} </Text>
+                      </Box>
+                    )}
+                    <Box flexShrink={0}>
+                      <Text color={row.color} dimColor={row.isOwn} wrap="truncate-end">
+                        {row.icon} {row.who}{' '}
+                      </Text>
+                    </Box>
+                    <Box flexGrow={1} flexShrink={1} minWidth={0}>
+                      <Text dimColor={row.isOwn} wrap="truncate-end">
+                        {row.tag ? `${row.tag} · ` : ''}
+                        {row.text}
+                      </Text>
+                    </Box>
                   </Box>
-                </Box>
+                )}
                 {isOpen && (
                   <Box flexDirection="column" borderStyle="round" borderDimColor paddingX={1}>
                     <Markdown text={r.body ? `**${r.title}**\n\n${r.body}` : r.title} />
+                    {(() => {
+                      const card = r.kind.startsWith('req:') ? cards.get(r.id) : undefined
+                      if (!card || card.outcome) return null
+                      return (
+                        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+                          {card.options
+                            .filter(option => option !== 'Later')
+                            .map((option, i) => (
+                              <Button
+                                key={`${r.id}-${option}`}
+                                label={option}
+                                variant={i === 0 ? 'primary' : 'secondary'}
+                                onPress={() => ignoreFailure(pressCard($, r.id, option))}
+                              />
+                            ))}
+                        </Box>
+                      )
+                    })()}
                     <Box flexDirection="row" gap={1}>
                       {r.from !== config.me && (
                         <Button
