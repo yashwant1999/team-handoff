@@ -60,7 +60,7 @@ Cut to the repository and docs:
 - **"Learning from AI failures"**: pick two, e.g. the `localhost` default found by a
   teammate and fixed with a regression test that fails on the old code, and the
   questions cut off at 200 characters.
-- Run `claude plugin test .` and `python3 relay/test_server.py`: 13 tests passing,
+- Run `claude plugin test .` and `python3 relay/test_server.py`: 14 tests passing,
   including security and abuse cases.
 
 ### 4:40–5:00 · Close

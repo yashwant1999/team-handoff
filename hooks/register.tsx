@@ -41,7 +41,7 @@ const ONE_ANSWER_MS = 600_000
 // Teammates gone longer than this drop out of the panel and the roster Claude sees.
 const STALE_MS = 24 * 60 * 60 * 1000
 const TRANSCRIPT_CHARS = 40_000
-const RECENT_LIMIT = 40
+const RECENT_LIMIT = 100
 
 // While Claude answers a teammate's question, it may only look, never change anything.
 const READ_ONLY_TOOLS = new Set([
@@ -91,7 +91,7 @@ const recent: { id: string; at: number; from: string; kind: string; title: strin
 // The Team panel: requests waiting on a button press, and the one feed row opened.
 const PANE = 'team'
 // A request in the panel: waiting on a button, or decided ("✓ accepted 12:10"), kept as a record.
-type Card = { m: Message; question: string; options: string[]; outcome?: string }
+type Card = { m: Message; question: string; options: string[]; outcome?: string; isLater?: boolean }
 const OUTCOME: Record<string, string> = { Accept: '✓ accepted', Allow: '✓ allowed', Share: '✓ shared', Decline: '✗ declined' }
 const REQUEST_ICON: Record<string, string> = { handoff: '📦', ask: '❓', connect: '🔗', request: '📤' }
 const cards = new Map<string, Card>()
@@ -901,8 +901,10 @@ async function pressCard($: $, id: string, choice: string) {
   const card = cards.get(id)
   if (!card || card.outcome) return
   if (choice === 'Later') {
-    // Stays waiting in the strip; the relay keeps it until a decision.
+    // Moves to the Later group, still waiting; the relay keeps it until a decision.
+    card.isLater = true
     if (expanded === id) expanded = undefined
+    $.ui.toast('Saved for later. It waits under "Later" until you decide.')
     return $.ui.invalidate('ui.render')
   }
   card.outcome = `${OUTCOME[choice] ?? choice} ${clock(Date.now())}`
@@ -1246,25 +1248,17 @@ export const register: Register = (on, options) => {
     const hidden = view.members.filter(m => m.user !== config.me).length - others.length
     const online = view.members.filter(m => m.online).length
     const waiting = waitingCards()
-    const shownWaiting = waiting.slice(0, 3)
+    const now = waiting.filter(([, card]) => !card.isLater)
+    const later = waiting.filter(([, card]) => card.isLater)
     const pendingAllow = awaitingAllow()
     const toggle = (id: string) => () => {
       expanded = expanded === id ? undefined : id
       $.ui.invalidate('ui.render')
     }
 
-    // Rows the fixed parts take; the feed gets what is left, newest last.
-    const fixed =
-      2 + // header + spacer
-      (view.isReachable ? 0 : 2) +
-      (view.newerVersion ? 1 : 0) +
-      2 + Math.max(1, others.length) + (hidden ? 1 : 0) +
-      (waiting.length ? 3 + shownWaiting.length * 3 + (waiting.length > shownWaiting.length ? 1 : 0) : 0) +
-      2 + (thinking.size ? 1 : 0) + (pendingAllow.length ? 1 : 0) +
-      (Input ? 4 : 2) +
-      (expanded ? 8 : 0)
     const isPending = (r: (typeof recent)[number]) => r.kind.startsWith('req:') && cards.has(r.id) && !cards.get(r.id)?.outcome
-    const feed = recent.filter(r => !isPending(r)).slice(-Math.max(2, height - fixed))
+    // Everything is drawn; the pane scrolls, and keeps the newest line in view.
+    const feed = recent.filter(r => !isPending(r))
 
     return (
       <Box flexDirection="column" minHeight={height}>
@@ -1311,7 +1305,7 @@ export const register: Register = (on, options) => {
         {waiting.length > 0 && (
           <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
             <Text bold color="yellow">Waiting for you · {waiting.length}</Text>
-            {shownWaiting.map(([id, card]) => {
+            {now.map(([id, card]) => {
               const detail = card.m.kind === 'connect' ? '' : card.m.body || ''
               const isOpen = expanded === id
               return (
@@ -1327,11 +1321,12 @@ export const register: Register = (on, options) => {
                     )}
                   </Box>
                   {isOpen && detail ? <Markdown text={detail} /> : null}
-                  <Box flexDirection="row" gap={1}>
+                  {card.m.kind === 'ask' && <Text dimColor>Answered read-only · you approve the answer before it's sent</Text>}
+                  <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
                     {card.options.map((option, i) => (
                       <Button
                         key={`${id}-${option}`}
-                        label={option === 'Allow' ? 'Allow (read-only)' : option}
+                        label={option}
                         variant={i === 0 ? 'primary' : 'secondary'}
                         onPress={() => ignoreFailure(pressCard($, id, option))}
                       />
@@ -1340,8 +1335,32 @@ export const register: Register = (on, options) => {
                 </Box>
               )
             })}
-            {waiting.length > shownWaiting.length && (
-              <Text dimColor>+{waiting.length - shownWaiting.length} more after these</Text>
+            {later.length > 0 && (
+              <Box flexDirection="column" marginTop={1}>
+                <Text dimColor>Later · {later.length}</Text>
+                {later.map(([id, card]) => (
+                  <Box key={id} flexDirection="column">
+                    <Box flexDirection="row">
+                      <Text dimColor>{REQUEST_ICON[card.m.kind] ?? '❓'} {card.m.from} </Text>
+                      <Box flexGrow={1} flexShrink={1}>
+                        <Text dimColor wrap="truncate-end">{requestSummary(card.m).replace(/^asked: /, 'asks: ')}</Text>
+                      </Box>
+                    </Box>
+                    <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+                      {card.options
+                        .filter(option => option !== 'Later')
+                        .map((option, i) => (
+                          <Button
+                            key={`${id}-${option}`}
+                            label={option}
+                            variant={i === 0 ? 'primary' : 'secondary'}
+                            onPress={() => ignoreFailure(pressCard($, id, option))}
+                          />
+                        ))}
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
             )}
           </Box>
         )}

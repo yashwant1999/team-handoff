@@ -8,7 +8,7 @@ seconds.
 
 ```bash
 claude plugin validate .         # manifest + hooks module, the way Claude Code loads them
-claude plugin test .             # 9 plugin tests (tests/panel.test.tsx)
+claude plugin test .             # 10 plugin tests (tests/panel.test.tsx)
 python3 relay/test_server.py     # 4 relay tests against a real relay process
 bash -n setup.sh                 # shell syntax
 ```
@@ -27,12 +27,13 @@ engine and the relay, so every network call and UI element is observable.
 | the panel shows who is online and the chat | positive | roster rows (name, repo · branch) and chat rows render from relay data |
 | /team-panel opens the panel, then closes it | positive | the toggle works both ways |
 | a question waits as a card until Allow is pressed | positive + negative | nothing is acknowledged or run before the human decides; Allow sends "typing" and starts the read-only answer |
-| Later keeps a request waiting; a decision is kept as a record | edge | Later acknowledges nothing; Decline replies and leaves `✗ declined` in the feed; the buttons disappear |
+| Later keeps a request waiting; a decision is kept as a record | edge | Later moves the request into a visible "Later" group and acknowledges nothing; Decline replies and leaves `✗ declined` in the feed; the buttons disappear |
 | an invite code joins as the invited handle | positive | the invite decodes, redeems at the right relay, and saves handle, address and personal token |
 | after a restart, the relay address saved by an invite is used | **regression** | fails on the old `localhost` default, passes on the fix |
 | a long question travels whole; the title is only a preview | edge | a 300+ character question arrives intact; the title stays ≤ 140 characters |
 | a message to someone offline says so | edge | the sender is told when the recipient is offline |
 | while answering, Claude may read and run read-only git, nothing else | **security / negative** | `git status` and `git log` pass; `git status; rm -rf .`, `git push` and Write are refused |
+| the feed keeps all history for scrolling, not only what fits | edge | with 30 messages in a 12-row panel, the oldest and newest are both drawn, so the panel can scroll back |
 
 ### Relay (`relay/test_server.py`)
 These start the real server on a free port and talk to it over HTTP.

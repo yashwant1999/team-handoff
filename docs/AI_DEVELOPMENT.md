@@ -27,7 +27,7 @@ became the next change.
 | **Define** | proposed product ideas from the team's real pain points; wrote user journeys and the plain-English command table | chose the idea and scope; set priorities (UX first, deadline) |
 | **Design** | compared architectures (polling or push, shared token or invites, panel or dialogs) with trade-offs; drew ASCII mock-ups before building | picked the options; asked for changes to the mock-ups |
 | **Build** | implemented the plugin, relay and setup script on feature branches | reviewed behaviour live |
-| **Test** | wrote 13 automated tests, including negative and edge cases; rendered the panel at different widths | tested on real machines with two teammates |
+| **Test** | wrote 14 automated tests, including negative and edge cases; rendered the panel at different widths | tested on real machines with two teammates |
 | **Review** | ran the validator, strict type-check and a confidentiality sweep before every push | approved each publish and push |
 | **Document** | README, COMMANDS cheat sheet, these docs | reviewed for accuracy |
 

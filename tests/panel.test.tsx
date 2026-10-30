@@ -130,6 +130,8 @@ test('Later keeps a request waiting; a decision is kept as a record', { options:
   await ui.press({ key: 'a1-Later' })
   expect(sent.some(s => s.path === '/ack')).toBe(false)
   expect(await ui.find({ type: 'Text', text: /Waiting for you · 1/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Later · 1/ })).toBeDefined()
+  expect(await ui.find({ key: 'a1-Later' })).toBeUndefined()
 
   await ui.press({ key: 'a1-Decline' })
   expect(sent.some(s => s.path === '/ack' && s.body.id === 'a1')).toBe(true)
@@ -232,4 +234,16 @@ test('while answering, Claude may read and run read-only git, nothing else', { o
   expect((await $.tool.call({ tool: 'Bash', command: 'git status; rm -rf .' })).deny).toMatch(/read-only/)
   expect((await $.tool.call({ tool: 'Bash', command: 'git push origin main' })).deny).toMatch(/read-only/)
   expect((await $.tool.call({ tool: 'Write', file_path: '/tmp/x', content: 'x' })).deny).toMatch(/read-only/)
+})
+
+test('the feed keeps all history for scrolling, not only what fits', { options: OPTIONS }, async ($, on) => {
+  const clock = mock.clock(on)
+  const many = Array.from({ length: 30 }, (_, i) => ({ id: `m${i}`, kind: 'chat', from: 'vatsal', to: 'yash', title: `message ${i}`, body: '', createdAt: 0 }))
+  engine(on, many, { isOpen: true })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.advance(12_000)
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, scroll: { offset: 0, bodyRows: 12 } } })
+  expect(await ui.find({ type: 'Text', text: /^message 0$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^message 29$/ })).toBeDefined()
+  await ui.unmount()
 })
