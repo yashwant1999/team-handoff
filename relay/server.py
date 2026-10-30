@@ -3,9 +3,11 @@
 
 Standard library only. Run it somewhere every teammate can reach:
 
-    TEAM_TOKEN=<shared secret> python3 server.py --port 8787 --data relay.json
+    TEAM_TOKEN=<host secret> python3 server.py --port 8787 --data relay.json
 
-Every request must carry the header `X-Team-Token: <shared secret>`.
+Every request carries the header `X-Team-Token`. TEAM_TOKEN is the host's admin
+token: it invites and removes people. A teammate gets a personal token by
+redeeming a one-time invite code, and that token only ever acts as that teammate.
 """
 
 import argparse
@@ -18,11 +20,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 ONLINE_SECONDS = 90
+INVITE_SECONDS = 600
 KINDS = {"handoff", "request", "note", "reply", "connect", "accept", "disconnect", "chat", "ask", "answer", "typing"}
+# Codes skip look-alike characters (0/O, 1/I/L) so they can be read out loud.
+CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+# Wrong invite codes allowed per address before it has to wait.
+REDEEM_FAILURES = 10
+REDEEM_WINDOW = 600
 
 lock = threading.Lock()
-db = {"members": {}, "messages": []}
+db = {"members": {}, "messages": [], "tokens": {}, "invites": {}}
 data_path = None
+redeem_failures = {}
 
 
 def load():
@@ -30,6 +39,8 @@ def load():
     if data_path and os.path.exists(data_path):
         with open(data_path) as f:
             db = json.load(f)
+    for key, empty in (("members", {}), ("messages", []), ("tokens", {}), ("invites", {})):
+        db.setdefault(key, empty)
 
 
 def save():
@@ -56,6 +67,15 @@ def members_view():
     )
 
 
+def new_code():
+    raw = "".join(secrets.choice(CODE_ALPHABET) for _ in range(8))
+    return f"{raw[:4]}-{raw[4:]}"
+
+
+def normalize_code(code):
+    return "".join(c for c in str(code).upper() if c in CODE_ALPHABET)
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
@@ -69,12 +89,28 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def authorized(self):
-        token = os.environ.get("TEAM_TOKEN", "")
+        """Sets self.admin and self.user from the token, or answers 401."""
+        admin_token = os.environ.get("TEAM_TOKEN", "")
         given = self.headers.get("X-Team-Token", "")
-        if token and secrets.compare_digest(token, given):
+        self.admin, self.user = False, None
+        if admin_token and secrets.compare_digest(admin_token, given):
+            self.admin = True
+            return True
+        with lock:
+            user = db["tokens"].get(given) if given else None
+        if user:
+            self.user = user
             return True
         log(f"refused: wrong or missing token from {self.client_address[0]}")
         self.reply(401, {"error": "bad or missing X-Team-Token"})
+        return False
+
+    def acts_as(self, user):
+        """A personal token may only act as its own handle; the host's may act as anyone."""
+        if self.admin or self.user == user:
+            return True
+        log(f"refused: {self.user} tried to act as {user} from {self.client_address[0]}")
+        self.reply(403, {"error": f"this token belongs to {self.user}"})
         return False
 
     def body(self):
@@ -86,31 +122,78 @@ class Handler(BaseHTTPRequestHandler):
             return
         url = urlparse(self.path)
         query = parse_qs(url.query)
-        with lock:
-            if url.path == "/members":
+        if url.path == "/members":
+            with lock:
                 return self.reply(200, {"members": members_view()})
-            if url.path == "/inbox":
-                user = (query.get("user") or [""])[0].lower()
-                pending = [
-                    m for m in db["messages"] if m["to"] == user and not m["acked"]
-                ]
-                return self.reply(200, {"messages": pending})
+        if url.path == "/inbox":
+            user = (query.get("user") or [""])[0].lower()
+            if not self.acts_as(user):
+                return
+            with lock:
+                pending = [m for m in db["messages"] if m["to"] == user and not m["acked"]]
+            return self.reply(200, {"messages": pending})
         self.reply(404, {"error": "not found"})
 
+    def redeem(self, data):
+        """Trades a one-time invite code for a personal token. Needs no token."""
+        address = self.client_address[0]
+        now = time.time()
+        recent = [t for t in redeem_failures.get(address, []) if now - t < REDEEM_WINDOW]
+        if len(recent) >= REDEEM_FAILURES:
+            return self.reply(429, {"error": "too many wrong codes; wait ten minutes"})
+        code = normalize_code(data.get("code", ""))
+        invite = db["invites"].pop(code, None)
+        if not invite or invite["expires"] < now:
+            redeem_failures[address] = recent + [now]
+            log(f"refused: unknown or expired invite code from {address}")
+            return self.reply(404, {"error": "unknown or expired invite code"})
+        token = secrets.token_urlsafe(24)
+        db["tokens"][token] = invite["user"]
+        save()
+        log(f"invite redeemed: {invite['user']} from {address}")
+        return self.reply(200, {"user": invite["user"], "token": token})
+
     def do_POST(self):
-        if not self.authorized():
-            return
         path = urlparse(self.path).path
         try:
             data = self.body()
         except json.JSONDecodeError:
             return self.reply(400, {"error": "body is not JSON"})
 
+        if path == "/redeem":
+            with lock:
+                return self.redeem(data)
+        if not self.authorized():
+            return
+
         with lock:
+            if path == "/invite" or path == "/remove":
+                if not self.admin:
+                    return self.reply(403, {"error": "only the host can invite or remove people"})
+                user = str(data.get("user", "")).strip().lower()
+                if not user:
+                    return self.reply(400, {"error": "user is required"})
+                if path == "/invite":
+                    # One live invite per person: a new one replaces the old.
+                    db["invites"] = {c: i for c, i in db["invites"].items() if i["user"] != user}
+                    code = new_code()
+                    db["invites"][normalize_code(code)] = {"user": user, "expires": time.time() + INVITE_SECONDS}
+                    save()
+                    log(f"invited: {user}")
+                    return self.reply(200, {"user": user, "code": code, "expiresIn": INVITE_SECONDS})
+                db["tokens"] = {t: u for t, u in db["tokens"].items() if u != user}
+                db["invites"] = {c: i for c, i in db["invites"].items() if i["user"] != user}
+                db["members"].pop(user, None)
+                save()
+                log(f"removed: {user}")
+                return self.reply(200, {"ok": True})
+
             if path == "/presence":
                 user = str(data.get("user", "")).lower()
                 if not user:
                     return self.reply(400, {"error": "user is required"})
+                if not self.acts_as(user):
+                    return
                 if user not in db["members"]:
                     log(f"joined: {user} from {self.client_address[0]}")
                 db["members"][user] = {
@@ -129,6 +212,8 @@ class Handler(BaseHTTPRequestHandler):
                 to = str(data.get("to", "")).lower()
                 if kind not in KINDS or not sender or not to:
                     return self.reply(400, {"error": "need kind, from and to"})
+                if not self.acts_as(sender):
+                    return
                 message = {
                     "id": secrets.token_hex(6),
                     "kind": kind,
@@ -150,6 +235,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/ack":
                 ids = set(data.get("ids") or [data.get("id")])
                 user = str(data.get("user", "")).lower()
+                if not self.acts_as(user):
+                    return
                 for m in db["messages"]:
                     if m["id"] in ids and m["to"] == user:
                         m["acked"] = True
@@ -167,10 +254,10 @@ def main():
     parser.add_argument("--data", default="relay.json")
     args = parser.parse_args()
     if not os.environ.get("TEAM_TOKEN"):
-        raise SystemExit("Set TEAM_TOKEN to the team's shared secret first.")
+        raise SystemExit("Set TEAM_TOKEN to the host's secret first.")
     data_path = args.data
     load()
-    print(f"team-handoff relay on http://{args.host}:{args.port}")
+    print(f"team-handoff relay on http://{args.host}:{args.port}", flush=True)
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
 
 

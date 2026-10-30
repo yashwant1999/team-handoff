@@ -3,8 +3,8 @@
 ## 0. Or just ask Claude
 
 After installing, every step below can be said in plain English:
-"host the team relay here, I'm alex", "join the team relay as sam, url …, token …",
-"is my team setup working?", "stop the team relay".
+"host the team relay here, I'm alex", "invite sam", "join the team with code tmh1-…",
+"remove sam", "is my team setup working?", "stop the team relay".
 
 ## 1. Host the relay (one person, once)
 
@@ -13,28 +13,36 @@ separate team that nobody else is on.
 
 ```bash
 cd ~/Projects/team-handoff
-./setup.sh --host <your-handle>     # start or restart the relay; prints the /team-join line
+./setup.sh --host <your-handle>     # start or restart the relay; records your network address
 ./setup.sh --stop                   # stop it
 PORT=8788 ./setup.sh --host <you>   # if port 8787 is busy
 ```
 
 | What | Where |
 | --- | --- |
-| Team token (reused on restart) | `~/.local/share/team-handoff/token` |
+| Host's admin token (reused on restart) | `~/.local/share/team-handoff/token` |
 | Relay log | `~/.local/share/team-handoff/relay.log` |
 | Relay process id | `~/.local/share/team-handoff/relay.pid` |
 | Your config | `~/.config/team-handoff.json` |
 
 Check the relay is up: `curl -H "X-Team-Token: $(cat ~/.local/share/team-handoff/token)" http://localhost:8787/members`
 
-## 2. Teammates join (two lines in Claude Code)
+## 2. Invite and join
 
-```
-/plugin install team-handoff --marketplace yashwant1999/team-handoff
-/team-join <their-handle> http://<relay-host>:8787 <token>
+Host, for each teammate: say **"invite sam"** (or `/team-invite sam`) and send sam the
+code privately. It works once, for 10 minutes, and only as sam.
+
+Teammate, once:
+
+```bash
+claude plugin marketplace add yashwant1999/team-handoff
+claude plugin install team-handoff@team-handoff --scope user
 ```
 
-Share the `/team-join` line privately, because it holds the token.
+Then in Claude Code: **"join the team with code tmh1-…"** (or `/team-join tmh1-…`).
+
+Remove someone: **"remove sam"**. Their token stops working at once; invite them
+again to let them back.
 
 ## 3. Just say it (plain English)
 
@@ -57,9 +65,10 @@ Share the `/team-join` line privately, because it holds the token.
 
 | Command | What it does |
 | --- | --- |
-| `/team-panel` | open or close the Team side panel (chat, request cards, who's online) |
+| `/team-panel` | open or close the Team side panel (chat, Waiting strip with Later, who's online) |
 | `/team` | who's online, you, your link, their branches |
-| `/team-join <handle> <url> <token>` | save your config and connect |
+| `/team-join <code>` | join with the invite code from the host |
+| `/team-invite <name>` | host only: a one-time invite code for a teammate |
 | `/connect <user>` · `/disconnect` | link with one teammate |
 | `/say [@user\|@team] <text>` | message the linked teammate, someone else, or everyone |
 | `/ask [@user\|@team] <question>` | ask a teammate's Claude, or the whole team |
@@ -88,10 +97,11 @@ phrases above.
 
 | Symptom | Fix |
 | --- | --- |
-| "not set up" | run `/team-join …` |
+| "not set up" | join with an invite code: `/team-join tmh1-…` |
 | status shows `relay unreachable` | relay down (`./setup.sh --host <you>`), wrong URL, or firewall on port 8787 |
-| "refused the team token" | the token changed; get the new `/team-join` line |
+| "refused the team token" | you were removed or the relay was reset; ask the host for a new invite |
+| "invite is used up or expired" | codes work once, for 10 minutes; ask the host for a new one |
 | relay won't start | `tail ~/.local/share/team-handoff/relay.log`; port busy → `PORT=8788` |
 | two terminals show the same handle | set `TEAM_HANDOFF_USER` in the second one |
-| a teammate started their own relay by mistake | they say "stop the team relay", then re-run the host's `/team-join` line |
+| a teammate started their own relay by mistake | they say "stop the team relay", then join again with an invite code from the host |
 | see who tried to connect, from the host's side | `tail -f ~/.local/share/team-handoff/relay.log` (shows refused tokens and new members with their IP) |

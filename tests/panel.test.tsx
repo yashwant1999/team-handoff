@@ -117,3 +117,52 @@ test('with the panel open, a question waits as a card until Allow is pressed', {
   expect(submitted[0]).toMatch(/^\[team-ask a1\]/)
   await ui.unmount()
 })
+
+test('Later keeps a request waiting; a decision is kept as a record', { options: OPTIONS }, async ($, on) => {
+  const clock = mock.clock(on)
+  const { sent } = engine(on, [ask], { isOpen: true })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.advance(12_000)
+
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'a1-Later' })
+  expect(sent.some(s => s.path === '/ack')).toBe(false)
+  expect((await ui.find({ type: 'Text', text: /1 waiting/ }))?.text).toMatch(/@yash/)
+
+  await ui.press({ key: 'a1-Decline' })
+  expect(sent.some(s => s.path === '/ack' && s.body.id === 'a1')).toBe(true)
+  expect(sent.some(s => s.path === '/messages' && s.body.kind === 'answer')).toBe(true)
+  expect((await ui.find({ key: 'a1-row' }))?.props.label).toMatch(/✗ declined/)
+  expect(await ui.find({ key: 'a1-Allow' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('an invite code joins as the invited handle', async ($, on) => {
+  const written: string[] = []
+  const redeemed: unknown[] = []
+  mock.clock(on)
+  on('http.fetch', (_, e) => {
+    if (e.url.endsWith('/redeem')) {
+      redeemed.push({ url: e.url, body: JSON.parse(e.init?.body ?? '{}') })
+      return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ user: 'vatsal', token: 'tok' }) } }
+    }
+    return { value: { status: 200, ok: true, headers: {}, text: '{}' } }
+  })
+  on('fs.exists', () => ({ value: false }))
+  on('fs.write', (_, e) => {
+    written.push(e.text)
+    return { value: undefined }
+  })
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('command.register', (_, e) => ({ value: { command: e.name } }))
+  on('tool.register', (_, e) => ({ value: { tool: `mcp__team-handoff__${e.name}` } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  mock.env(on, { HOME: '/home/test' })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const code = 'tmh1-' + btoa('http://192.168.1.5:8787|K7P2-9QXA').replace(/=+$/, '')
+  const joined = await $.tool.call({ tool: 'mcp__team-handoff__team_join', code })
+  expect(String(joined.text)).toMatch(/Joined as @vatsal/)
+  expect(redeemed).toEqual([{ url: 'http://192.168.1.5:8787/redeem', body: { code: 'K7P2-9QXA' } }])
+  expect(JSON.parse(written[0] ?? '{}')).toMatchObject({ user: 'vatsal', relayUrl: 'http://192.168.1.5:8787', teamToken: 'tok' })
+})

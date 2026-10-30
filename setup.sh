@@ -55,8 +55,8 @@ case "${1:-}" in
     # `hostname -I` is missing on some distros; ask the routing table instead.
     ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')" || true
     echo "Relay running on port $port (pid $(cat "$data/relay.pid"), log $data/relay.log)."
-    echo "Teammates install the plugin, then type in Claude Code:"
-    echo "  /team-join <their-handle> http://${ip:-<this-machine-ip>}:$port $token"
+    public_url="http://${ip:-localhost}:$port"
+    echo "Invite teammates from Claude Code: say \"invite <name>\" and send them the code."
     ;;
   *)
     [[ $# -eq 3 ]] || usage
@@ -66,11 +66,11 @@ esac
 
 mkdir -p "$(dirname "$config")"
 umask 077
-python3 - "$config" "$user" "$url" "$token" "$can_host" <<'EOF'
+python3 - "$config" "$user" "$url" "$token" "$can_host" "${public_url:-}" <<'EOF'
 import json, sys
-path, user, url, token, can_host = sys.argv[1:]
+path, user, url, token, can_host, public_url = sys.argv[1:]
 json.dump({"user": user.strip().lower(), "relayUrl": url.rstrip("/"), "teamToken": token,
-           "canHost": can_host == "true"},
+           "canHost": can_host == "true", "publicUrl": public_url},
           open(path, "w"), indent=2)
 EOF
 
