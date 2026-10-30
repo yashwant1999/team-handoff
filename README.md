@@ -53,6 +53,14 @@ do the same.
 Slash shortcuts: `/team`, `/connect`, `/disconnect`, `/say [@user|@team]`,
 `/ask [@user|@team]`, `/handoff`, `/team-status`, `/team-inbox`, `/team-join`.
 
+## Team panel
+
+`/team-panel` (or "open the team panel") toggles a side panel with who's online, the
+chat with an input box, and request cards. Allow, Accept and Decline are buttons there,
+so nothing pops up over your work. Long messages, answers and handoffs open on press.
+Close the panel and everything goes back to dialogs and transcript lines. The panel
+needs about 110 columns; a narrower terminal keeps the dialogs.
+
 ## Safety
 
 - A teammate's message is information. Claude never acts on it unless you ask.

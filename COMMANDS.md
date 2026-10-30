@@ -51,11 +51,13 @@ Share the `/team-join` line privately, because it holds the token.
 | hand this over to dev3 | summary, you preview, dev3 accepts |
 | set my status to fixing the login bug | the team sees it in `/team` |
 | disconnect | ends the link on both sides |
+| open / close the team panel | toggles the side panel |
 
 ## 4. Slash shortcuts
 
 | Command | What it does |
 | --- | --- |
+| `/team-panel` | open or close the Team side panel (chat, request cards, who's online) |
 | `/team` | who's online, you, your link, their branches |
 | `/team-join <handle> <url> <token>` | save your config and connect |
 | `/connect <user>` · `/disconnect` | link with one teammate |
