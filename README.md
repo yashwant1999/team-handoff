@@ -62,11 +62,24 @@ Slash shortcuts: `/team`, `/connect`, `/disconnect`, `/say [@user|@team]`,
 
 ## Team panel
 
-`/team-panel` (or "open the team panel") toggles a side panel with who's online, the
-chat with an input box, and a **Waiting** strip of requests (handoffs, questions,
-connects) with Accept/Allow, Decline and **Later** buttons, so nothing pops up over your
-work. Later keeps a request waiting, even across restarts. Every request also stays in
-the feed with its outcome (`✓ accepted 12:10`, `✗ declined`). Long rows open on press.
+`/team-panel` (or "open the team panel") toggles a side panel:
+
+- **TEAM:** who's online, their repo and branch, and when offline people were last seen.
+  People gone over a day are folded away.
+- **Waiting for you:** handoffs, questions and connect requests, with Accept/Allow,
+  Decline and **Later** buttons, so nothing pops up over your work. Read a handoff before
+  accepting it (`▸ read`). Later keeps a request waiting, even across restarts.
+- **ACTIVITY:** one line per event, newest next to the input: chat, your sent messages
+  and questions, answers, and each request's outcome (`✓ accepted 12:10`, `✗ declined`).
+  Rows with more open on press, with Reply and Copy.
+- **Signals:** `⏳ answering…` while a teammate's Claude works on your question, and
+  `❓ waiting for … to allow` before that. A question nobody answers ends with a
+  "no reply" note.
+- **The input box:** messages your connected teammate, or `@name` / `@team`.
+
+The status bar shows the same signals when the panel is closed, plus `💬 2 new` for
+unread messages and `⬆ update` when a teammate runs a newer version. The panel adapts to
+narrow widths. A terminal too narrow for it keeps the dialogs.
 Close the panel and everything goes back to dialogs and transcript lines. The panel
 needs about 110 columns; a narrower terminal keeps the dialogs.
 
@@ -74,6 +87,8 @@ needs about 110 columns; a narrower terminal keeps the dialogs.
 
 - A teammate's message is information. Claude never acts on it unless you ask.
 - A question to your Claude needs your **Allow**. While answering, Claude can only
-  Read, Grep and Glob. You approve the answer before it is sent.
+  Read, Grep, Glob and run read-only git (`git status`, `git log`, `git branch`,
+  `git diff --stat`). Anything else, including chained commands, is refused. You approve
+  the answer before it is sent.
 - A handoff is a summary, never the transcript. Lines that look like keys or tokens
   are redacted, and you preview the summary before it is sent.

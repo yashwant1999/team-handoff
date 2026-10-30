@@ -74,8 +74,10 @@ test('the panel shows who is online and the chat', { options: OPTIONS }, async (
   await clock.advance(12_000)
 
   const ui = await $.ui.mount(PANE)
-  expect((await ui.find({ type: 'Text', text: /bugfix\/appicon/ }))?.text).toMatch(/vatsal/)
-  expect((await ui.find({ type: 'Text', text: /hi there/ }))?.text).toMatch(/vatsal/)
+  expect(await ui.find({ type: 'Text', text: /^vatsal/ })).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /bugfix\/appicon/ }))?.text).toBe('app · bugfix/appicon')
+  expect(await ui.find({ type: 'Text', text: /💬 vatsal/ })).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /hi there/ }))?.text).toBe('hi there')
   await ui.unmount()
 })
 
@@ -109,7 +111,7 @@ test('with the panel open, a question waits as a card until Allow is pressed', {
   expect(submitted).toEqual([])
 
   const ui = await $.ui.mount(PANE)
-  expect((await ui.find({ type: 'Text', text: /what branch\?/ }))?.text).toMatch(/vatsal asks your Claude/)
+  expect((await ui.find({ type: 'Text', text: /what branch\?/ }))?.text).toBe('asks: what branch?')
   await ui.press({ key: 'a1-Allow' })
 
   expect(sent.some(s => s.path === '/ack' && s.body.id === 'a1')).toBe(true)
@@ -127,12 +129,13 @@ test('Later keeps a request waiting; a decision is kept as a record', { options:
   const ui = await $.ui.mount(PANE)
   await ui.press({ key: 'a1-Later' })
   expect(sent.some(s => s.path === '/ack')).toBe(false)
-  expect((await ui.find({ type: 'Text', text: /1 waiting/ }))?.text).toMatch(/@yash/)
+  expect(await ui.find({ type: 'Text', text: /Waiting for you · 1/ })).toBeDefined()
 
   await ui.press({ key: 'a1-Decline' })
   expect(sent.some(s => s.path === '/ack' && s.body.id === 'a1')).toBe(true)
   expect(sent.some(s => s.path === '/messages' && s.body.kind === 'answer')).toBe(true)
-  expect((await ui.find({ key: 'a1-row' }))?.props.label).toMatch(/✗ declined/)
+  expect((await ui.find({ type: 'Text', text: /✗ declined/ }))?.text).toMatch(/asked: what branch\?/)
+  expect(await ui.find({ type: 'Text', text: /Waiting for you/ })).toBeUndefined()
   expect(await ui.find({ key: 'a1-Allow' })).toBeUndefined()
   await ui.unmount()
 })
@@ -187,4 +190,46 @@ test('after a restart, the relay address saved by an invite is used', async ($, 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   expect(urls.length).toBeGreaterThan(0)
   expect(urls.every(url => url.startsWith('http://192.168.1.5:8787/'))).toBe(true)
+})
+
+test('a long question travels whole; the title is only a preview', { options: OPTIONS }, async ($, on) => {
+  mock.clock(on)
+  const { sent } = engine(on, [], { isOpen: false })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const question = `Is the PR for feat/hof-area-picker open or merged? ${'Give the PR number and checks. '.repeat(10)}`
+  const asked = await $.tool.call({ tool: 'mcp__team-handoff__team_ask', to: 'vatsal', question })
+  expect(String(asked.text)).toMatch(/Asked vatsal's Claude/)
+  const message = sent.find(s => s.path === '/messages' && s.body.kind === 'ask')
+  expect(message?.body.body).toBe(question.trim())
+  expect(String(message?.body.title).length).toBeLessThanOrEqual(140)
+})
+
+test('a message to someone offline says so', { options: OPTIONS }, async ($, on) => {
+  mock.clock(on)
+  engine(on, [], { isOpen: false })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const toAway = await $.tool.call({ tool: 'mcp__team-handoff__team_message', to: 'dev2', text: 'hi' })
+  expect(String(toAway.text)).toMatch(/dev2 is offline: delivered when back/)
+  const toOnline = await $.tool.call({ tool: 'mcp__team-handoff__team_message', to: 'vatsal', text: 'hi' })
+  expect(String(toOnline.text)).not.toMatch(/offline/)
+})
+
+test('while answering, Claude may read and run read-only git, nothing else', { options: OPTIONS }, async ($, on) => {
+  const clock = mock.clock(on)
+  const { submitted } = engine(on, [ask], { isOpen: true })
+  on('tool.call', () => ({ result: 'ran' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.advance(12_000)
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'a1-Allow' })
+  await ui.unmount()
+
+  await $.turn.start({ text: submitted[0] ?? '', turnId: 't1' })
+  expect((await $.tool.call({ tool: 'Bash', command: 'git status --short' })).deny).toBeUndefined()
+  expect((await $.tool.call({ tool: 'Bash', command: 'git log --oneline -5' })).deny).toBeUndefined()
+  expect((await $.tool.call({ tool: 'Bash', command: 'git status; rm -rf .' })).deny).toMatch(/read-only/)
+  expect((await $.tool.call({ tool: 'Bash', command: 'git push origin main' })).deny).toMatch(/read-only/)
+  expect((await $.tool.call({ tool: 'Write', file_path: '/tmp/x', content: 'x' })).deny).toMatch(/read-only/)
 })

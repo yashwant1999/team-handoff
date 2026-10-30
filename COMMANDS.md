@@ -103,5 +103,7 @@ phrases above.
 | "invite is used up or expired" | codes work once, for 10 minutes; ask the host for a new one |
 | relay won't start | `tail ~/.local/share/team-handoff/relay.log`; port busy → `PORT=8788` |
 | two terminals show the same handle | set `TEAM_HANDOFF_USER` in the second one |
+| status bar shows `⬆ update to …` | `claude plugin marketplace update team-handoff && claude plugin update team-handoff@team-handoff --scope user`, then restart |
+| a question got "no reply" | the teammate didn't allow it in time (10 minutes; 2 for a team question); ask again |
 | a teammate started their own relay by mistake | they say "stop the team relay", then join again with an invite code from the host |
 | see who tried to connect, from the host's side | `tail -f ~/.local/share/team-handoff/relay.log` (shows refused tokens and new members with their IP) |

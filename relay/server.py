@@ -201,6 +201,7 @@ class Handler(BaseHTTPRequestHandler):
                     "repo": data.get("repo", ""),
                     "branch": data.get("branch", ""),
                     "status": data.get("status", ""),
+                    "version": str(data.get("version", ""))[:20],
                     "lastSeen": time.time(),
                 }
                 save()
